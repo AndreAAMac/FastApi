@@ -1,5 +1,7 @@
 from http import HTTPStatus
 
+from fast_zero.schemas import UserPublic
+
 # teste segue tres etapas = Arrange, Act, Assert
 
 
@@ -13,40 +15,35 @@ def test_root_deve_retornar_ok_e_ola_mundo(client):
 
 
 def test_create_user(client):
-    # client = TestClient(app)
     response = client.post(
-        '/users/',
+        '/users',
         json={
-            'username': 'testeusername',
-            'password': 'password',
-            'email': 'andre@hotmail.com',
+            'username': 'alice',
+            'email': 'alice@example.com',
+            'password': 'secret',
         },
     )
-    # Voltou o status code correto?
     assert response.status_code == HTTPStatus.CREATED
-    # Validar UserPublic
     assert response.json() == {
-        'username': 'testeusername',
-        'email': 'andre@hotmail.com',
+        'username': 'alice',
+        'email': 'alice@example.com',
         'id': 1,
     }
 
 
 def test_read_users(client):
-    response = client.get('/users/')
+    response = client.get('/users')
     assert response.status_code == HTTPStatus.OK
-    assert response.json() == {
-        'users': [
-            {
-                'username': 'testeusername',
-                'email': 'andre@hotmail.com',
-                'id': 1,
-            }
-        ]
-    }
+    assert response.json() == {'users': []}
 
 
-def test_update_user(client):
+def test_read_users_with_users(client, user):
+    user_schema = UserPublic.model_validate(user).model_dump()
+    response = client.get('/users/')
+    assert response.json() == {'users': [user_schema]}
+
+
+def test_update_user(client, user):
     response = client.put(
         '/users/1',
         json={
@@ -63,8 +60,33 @@ def test_update_user(client):
     }
 
 
-def test_delete_user(client):
-    response = client.delete('/users/1')
+def test_update_integrity_error(client, user):
+    # Inserindo fausto
+    client.post(
+        '/users',
+        json={
+            'username': 'fausto',
+            'email': 'fausto@example.com',
+            'password': 'secret',
+        },
+    )
 
+    # Alterando o user das fixture para fausto
+    response_update = client.put(
+        f'/users/{user.id}',
+        json={
+            'username': 'fausto',
+            'email': 'bob@example.com',
+            'password': 'mynewpassword',
+        },
+    )
+    assert response_update.status_code == HTTPStatus.CONFLICT
+    assert response_update.json() == {
+        'detail': 'Username or Email already exists'
+    }
+
+
+def test_delete_user(client, user):
+    response = client.delete('/users/1')
     assert response.status_code == HTTPStatus.OK
     assert response.json() == {'message': 'User deleted'}
